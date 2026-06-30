@@ -69,6 +69,7 @@ import com.threethan.launcher.helper.Compat;
 import com.threethan.launcher.helper.PlatformExt;
 import com.threethan.launcher.updater.LauncherUpdater;
 import com.threethan.launcher.updater.RemotePackageUpdater;
+import com.threethan.launcher.web.WebServerService;
 import com.threethan.launchercore.Core;
 import com.threethan.launchercore.lib.ImageLib;
 import com.threethan.launchercore.util.Keyboard;
@@ -267,6 +268,13 @@ public class LauncherActivity extends Launch.LaunchingActivity {
 
         if (hasBound) return;
         hasBound = true;
+
+        // Auto-start web server if it was previously enabled
+        if (getDataStoreEditor().getBoolean(Settings.KEY_WEB_SERVER_ENABLED, false)
+                && !WebServerService.isRunning()) {
+            startForegroundService(new Intent(this, WebServerService.class));
+        }
+
         final boolean hasView = launcherService.checkForExistingView();
 
         if (hasView) startWithExistingView();

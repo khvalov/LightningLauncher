@@ -5,6 +5,8 @@
     xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"
         tools:ignore="LeanbackUsesWifi" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -204,6 +206,12 @@
             <meta-data android:name="com.oculus.vrshell.free_resizing_limits" android:value="630,2520,270,1080"/>
             <meta-data android:name="com.oculus.vrdesktop.control_bar_config" android:value="{'show_title':false, 'use_activity_label':true}"/>
         </activity>
+
+        <!-- HTTP server for remote web control -->
+        <service
+            android:name=".web.WebServerService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- Service that provides/manages Launcher views -->
         <service

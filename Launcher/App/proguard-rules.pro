@@ -1,4 +1,5 @@
 # DataStore
+-keep class fi.iki.elonen.** { *; }
 -keep class androidx.datastore.** { *; }
 -keepclassmembers class * {
     @androidx.annotation.Keep *;

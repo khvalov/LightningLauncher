@@ -158,6 +158,9 @@ public abstract class Settings {
     public static final String KEY_LAUNCH_BROWSER = "prefLaunchBrowser";
     public static final String KEY_DEFAULT_BROWSER = "KEY_DEFAULT_BROWSER";
 
+    public static final String KEY_WEB_SERVER_ENABLED = "WEB_SERVER_ENABLED";
+    public static final int WEB_SERVER_PORT = 8080;
+
     /** @noinspection rawtypes */
     public static final Class[] launchSizeClasses = {
             null,

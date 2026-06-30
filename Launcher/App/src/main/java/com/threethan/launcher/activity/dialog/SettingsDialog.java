@@ -4,6 +4,7 @@ import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.os.Build;
 import android.view.View;
 import android.view.animation.DecelerateInterpolator;
@@ -30,6 +31,7 @@ import com.threethan.launcher.helper.PlaytimeHelper;
 import com.threethan.launcher.helper.SettingsSaver;
 import com.threethan.launcher.helper.VariantHelper;
 import com.threethan.launcher.updater.LauncherUpdater;
+import com.threethan.launcher.web.WebServerService;
 import com.threethan.launchercore.util.App;
 import com.threethan.launchercore.util.LcDialog;
 import com.threethan.launchercore.util.Platform;
@@ -433,6 +435,26 @@ public class SettingsDialog extends LcDialog<LauncherActivity> {
 
             Compat.restartFully();
         });
+
+        // Remote Web Control toggle
+        Switch webServerSwitch = dialog.findViewById(R.id.webServerSwitch);
+        TextView webServerUrl = dialog.findViewById(R.id.webServerUrl);
+        boolean webEnabled = a.getDataStoreEditor().getBoolean(Settings.KEY_WEB_SERVER_ENABLED, false);
+        webServerSwitch.setChecked(webEnabled);
+        updateWebServerUrl(webServerUrl);
+        webServerSwitch.setOnCheckedChangeListener((btn, checked) -> {
+            a.getDataStoreEditor().putBoolean(Settings.KEY_WEB_SERVER_ENABLED, checked);
+            Intent svcIntent = new Intent(a, WebServerService.class);
+            if (checked) {
+                a.startForegroundService(svcIntent);
+                // Brief delay so the service has time to start and get the IP
+                webServerUrl.postDelayed(() -> updateWebServerUrl(webServerUrl), 400);
+            } else {
+                a.stopService(svcIntent);
+                webServerUrl.setVisibility(View.GONE);
+            }
+        });
+
         return dialog;
     }
 
@@ -693,6 +715,16 @@ public class SettingsDialog extends LcDialog<LauncherActivity> {
      * @param setting Setting string key
      * @param def Default setting value
      */
+    private void updateWebServerUrl(TextView urlView) {
+        String url = WebServerService.getServerUrl();
+        if (url != null) {
+            urlView.setText(url);
+            urlView.setVisibility(View.VISIBLE);
+        } else {
+            urlView.setVisibility(View.GONE);
+        }
+    }
+
     private void attachSwitchToSetting(CompoundButton toggle, String setting,
                                        boolean def) {
         attachSwitchToSetting(toggle, setting, def, null, false);

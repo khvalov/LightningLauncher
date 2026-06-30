@@ -60,6 +60,7 @@ android {
 }
 dependencies {
     implementation 'com.google.code.gson:gson:2.13.2'
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
 
     implementation 'androidx.datastore:datastore-preferences-rxjava3:1.2.0'
     implementation 'androidx.recyclerview:recyclerview:1.4.0'
