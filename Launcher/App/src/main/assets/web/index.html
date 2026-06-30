@@ -6,77 +6,137 @@
 <title>Lightning Launcher</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0d0d0d; color: #e0e0e0; font-family: sans-serif; min-height: 100vh; }
-  header { background: #1a1a2e; padding: 16px 20px; display: flex; align-items: center; gap: 16px; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 8px #0005; }
-  header h1 { font-size: 1.2rem; color: #a0c4ff; white-space: nowrap; }
-  #search { flex: 1; background: #252535; border: 1px solid #444; border-radius: 8px; padding: 8px 14px; color: #e0e0e0; font-size: 1rem; outline: none; }
+  body { background: #0d0d0d; color: #e0e0e0; font-family: sans-serif; min-height: 100vh; display: flex; flex-direction: column; }
+  header { background: #1a1a2e; padding: 12px 16px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 20; box-shadow: 0 2px 8px #0005; }
+  header h1 { font-size: 1.1rem; color: #a0c4ff; white-space: nowrap; }
+  #search { flex: 1; background: #252535; border: 1px solid #444; border-radius: 8px; padding: 7px 13px; color: #e0e0e0; font-size: 0.95rem; outline: none; }
   #search:focus { border-color: #a0c4ff; }
-  #count { color: #888; font-size: 0.85rem; white-space: nowrap; }
-  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; padding: 20px; }
-  .card { background: #1e1e2e; border-radius: 12px; padding: 14px 10px 10px; display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; border: 1px solid #2a2a3a; transition: background 0.15s, transform 0.1s; user-select: none; }
+  #count { color: #666; font-size: 0.8rem; white-space: nowrap; min-width: 50px; text-align: right; }
+
+  /* Group tabs bar */
+  #groups-bar { background: #141424; border-bottom: 1px solid #2a2a3a; padding: 0 8px; display: flex; gap: 4px; overflow-x: auto; position: sticky; top: 49px; z-index: 10; scrollbar-width: none; }
+  #groups-bar::-webkit-scrollbar { display: none; }
+  .group-tab { padding: 8px 14px; font-size: 0.82rem; white-space: nowrap; cursor: pointer; border-bottom: 2px solid transparent; color: #888; transition: color 0.15s, border-color 0.15s; user-select: none; }
+  .group-tab:hover { color: #ccc; }
+  .group-tab.active { color: #a0c4ff; border-bottom-color: #a0c4ff; }
+  .group-tab .badge { font-size: 0.68rem; color: #555; margin-left: 4px; }
+  .group-tab.active .badge { color: #6080b0; }
+
+  /* App grid */
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; padding: 16px; }
+  .card { background: #1e1e2e; border-radius: 10px; padding: 12px 8px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; border: 1px solid #2a2a3a; transition: background 0.12s, transform 0.1s; user-select: none; }
   .card:hover { background: #2a2a40; transform: scale(1.04); }
   .card:active { transform: scale(0.97); }
-  .card img { width: 72px; height: 72px; object-fit: contain; border-radius: 8px; background: #111; }
-  .card span { font-size: 0.75rem; text-align: center; line-height: 1.3; word-break: break-word; color: #ccc; }
-  .badge { font-size: 0.6rem; padding: 1px 5px; border-radius: 4px; background: #333; color: #999; align-self: flex-start; }
-  .badge.VR { background: #1a3a5c; color: #7ec8e3; }
-  .badge.PHONE { background: #1c3a1c; color: #7ecf7e; }
-  .badge.TV { background: #3a1a1a; color: #e37e7e; }
-  .badge.WEB { background: #2a1a3a; color: #b87ee3; }
-  .badge.PANEL { background: #2a2a1a; color: #e3d07e; }
-  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #222; color: #a0c4ff; padding: 10px 22px; border-radius: 24px; border: 1px solid #444; font-size: 0.95rem; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 100; }
+  .card img { width: 64px; height: 64px; object-fit: contain; border-radius: 8px; background: #111; }
+  .card span { font-size: 0.72rem; text-align: center; line-height: 1.3; word-break: break-word; color: #ccc; }
+
+  #empty { display: none; color: #555; text-align: center; padding: 60px 20px; font-size: 0.95rem; }
+  #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1e1e3e; color: #a0c4ff; padding: 9px 20px; border-radius: 20px; border: 1px solid #3a3a5a; font-size: 0.9rem; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 100; }
   #toast.show { opacity: 1; }
-  #empty { display: none; color: #666; text-align: center; padding: 60px 20px; font-size: 1rem; }
 </style>
 </head>
 <body>
 <header>
   <h1>⚡ Lightning Launcher</h1>
-  <input id="search" type="text" placeholder="Search apps…" autocomplete="off" />
+  <input id="search" type="text" placeholder="Search…" autocomplete="off" />
   <span id="count"></span>
 </header>
+<div id="groups-bar"></div>
 <div id="grid"></div>
 <div id="empty">No apps found</div>
 <div id="toast"></div>
+
 <script>
 let allApps = [];
+let groups = [];
+let selectedGroup = '__all__';
 
-async function loadApps() {
-  try {
-    const r = await fetch('/api/apps');
-    allApps = await r.json();
-    render(allApps);
-  } catch(e) {
-    document.getElementById('empty').style.display = 'block';
-    document.getElementById('empty').textContent = 'Could not load apps: ' + e.message;
+async function init() {
+  const [appsRes, groupsRes] = await Promise.all([
+    fetch('/api/apps'),
+    fetch('/api/groups')
+  ]).catch(e => { showEmpty('Failed to load: ' + e.message); return [null, null]; });
+
+  if (!appsRes) return;
+  allApps = await appsRes.json();
+  groups = await groupsRes.json();
+
+  renderGroupTabs();
+  render();
+}
+
+function renderGroupTabs() {
+  const bar = document.getElementById('groups-bar');
+  bar.innerHTML = '';
+
+  const allTab = makeTab('All', allApps.length, '__all__');
+  bar.appendChild(allTab);
+
+  for (const g of groups) {
+    bar.appendChild(makeTab(g.name, g.count, g.name));
   }
 }
 
-function render(apps) {
+function makeTab(label, count, key) {
+  const tab = document.createElement('div');
+  tab.className = 'group-tab' + (selectedGroup === key ? ' active' : '');
+  tab.innerHTML = esc(label) + ' <span class="badge">' + count + '</span>';
+  tab.addEventListener('click', () => {
+    selectedGroup = key;
+    document.getElementById('search').value = '';
+    document.querySelectorAll('.group-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    render();
+  });
+  return tab;
+}
+
+function render() {
+  const q = document.getElementById('search').value.trim().toLowerCase();
+  let apps = allApps;
+
+  // Filter by group
+  if (selectedGroup !== '__all__') {
+    apps = apps.filter(a => a.group === selectedGroup);
+  }
+
+  // Filter by search
+  if (q) {
+    apps = apps.filter(a =>
+      a.label.toLowerCase().includes(q) ||
+      a.packageName.toLowerCase().includes(q)
+    );
+  }
+
   const grid = document.getElementById('grid');
   const empty = document.getElementById('empty');
-  const count = document.getElementById('count');
-  grid.innerHTML = '';
-  count.textContent = apps.length + ' app' + (apps.length !== 1 ? 's' : '');
-  if (apps.length === 0) { empty.style.display = 'block'; return; }
+  document.getElementById('count').textContent = apps.length + ' app' + (apps.length !== 1 ? 's' : '');
+
+  if (apps.length === 0) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    empty.textContent = q ? 'No results for "' + q + '"' : 'No apps in this group';
+    return;
+  }
   empty.style.display = 'none';
+
   const frag = document.createDocumentFragment();
   for (const app of apps) {
     const card = document.createElement('div');
     card.className = 'card';
     const encoded = encodeURIComponent(app.packageName);
     card.innerHTML =
-      `<img src="/api/icon/${encoded}" loading="lazy" onerror="this.style.opacity='0.3'">` +
-      `<span class="badge ${app.type}">${app.type}</span>` +
-      `<span>${esc(app.label)}</span>`;
+      '<img src="/api/icon/' + encoded + '" loading="lazy" onerror="this.style.opacity=\'0.2\'">' +
+      '<span>' + esc(app.label) + '</span>';
     card.addEventListener('click', () => launch(app));
     frag.appendChild(card);
   }
+  grid.innerHTML = '';
   grid.appendChild(frag);
 }
 
 function esc(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 async function launch(app) {
@@ -88,7 +148,7 @@ async function launch(app) {
       body: JSON.stringify({packageName: app.packageName})
     });
     const data = await r.json();
-    if (!data.success) showToast('Failed: ' + (data.error || 'unknown error'));
+    if (!data.success) showToast('Failed: ' + (data.error || 'unknown'));
   } catch(e) {
     showToast('Error: ' + e.message);
   }
@@ -103,12 +163,22 @@ function showToast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
 }
 
+function showEmpty(msg) {
+  const e = document.getElementById('empty');
+  e.textContent = msg;
+  e.style.display = 'block';
+}
+
+// Search — switch to All tab when typing
 document.getElementById('search').addEventListener('input', function() {
-  const q = this.value.trim().toLowerCase();
-  render(q ? allApps.filter(a => a.label.toLowerCase().includes(q) || a.packageName.toLowerCase().includes(q)) : allApps);
+  if (this.value) {
+    selectedGroup = '__all__';
+    document.querySelectorAll('.group-tab').forEach((t, i) => t.classList.toggle('active', i === 0));
+  }
+  render();
 });
 
-loadApps();
+init();
 </script>
 </body>
 </html>

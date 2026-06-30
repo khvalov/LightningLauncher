@@ -269,12 +269,6 @@ public class LauncherActivity extends Launch.LaunchingActivity {
         if (hasBound) return;
         hasBound = true;
 
-        // Auto-start web server if it was previously enabled
-        if (getDataStoreEditor().getBoolean(Settings.KEY_WEB_SERVER_ENABLED, false)
-                && !WebServerService.isRunning()) {
-            startForegroundService(new Intent(this, WebServerService.class));
-        }
-
         final boolean hasView = launcherService.checkForExistingView();
 
         if (hasView) startWithExistingView();
@@ -321,6 +315,13 @@ public class LauncherActivity extends Launch.LaunchingActivity {
     protected void init() {
         Core.init(this);
         settingsManager = SettingsManager.getInstance(this);
+
+        // Auto-start web server after SettingsManager is ready (uses async read to avoid blocking)
+        if (!WebServerService.isRunning()) {
+            getDataStoreEditor().getBoolean(Settings.KEY_WEB_SERVER_ENABLED, false, enabled -> {
+                if (enabled) startForegroundService(new Intent(this, WebServerService.class));
+            });
+        }
 
         mainView = rootView.findViewById(R.id.mainLayout);
         topBar = mainView.findViewById(R.id.topBarLayout);

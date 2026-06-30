@@ -26,10 +26,12 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import fi.iki.elonen.NanoHTTPD;
 
@@ -51,6 +53,9 @@ public class LauncherHttpServer extends NanoHTTPD {
             }
             if (uri.equals("/api/apps") && method == Method.GET) {
                 return serveApps();
+            }
+            if (uri.equals("/api/groups") && method == Method.GET) {
+                return serveGroups();
             }
             if (uri.equals("/api/launch") && method == Method.POST) {
                 return serveLaunch(session);
@@ -75,23 +80,83 @@ public class LauncherHttpServer extends NanoHTTPD {
         }
     }
 
+    /** Returns all apps with their group assignment. Hidden-group apps are excluded. */
     private Response serveApps() {
+        ConcurrentHashMap<String, Set<String>> gam = safeGetGroupAppsMap();
+
+        // Build reverse map: packageName → groupName
+        Map<String, String> packageToGroup = new HashMap<>();
+        for (Map.Entry<String, Set<String>> entry : gam.entrySet()) {
+            String group = entry.getKey();
+            for (String pkg : entry.getValue()) {
+                packageToGroup.put(pkg, group);
+            }
+        }
+
+        Set<String> hiddenPkgs = gam.getOrDefault(Settings.HIDDEN_GROUP, java.util.Collections.emptySet());
+        Set<String> unsupportedPkgs = gam.getOrDefault(Settings.UNSUPPORTED_GROUP, java.util.Collections.emptySet());
+
         List<Map<String, String>> result = new ArrayList<>();
         for (ApplicationInfo app : PlatformExt.apps) {
             App.Type type = App.getType(app);
             if (type == App.Type.UNSUPPORTED || type == App.Type.UTILITY) continue;
-            Map<String, String> entry = new java.util.HashMap<>();
+            if (hiddenPkgs.contains(app.packageName)) continue;
+            if (unsupportedPkgs.contains(app.packageName)) continue;
+
+            String group = packageToGroup.getOrDefault(app.packageName, "");
+
+            Map<String, String> entry = new HashMap<>();
             entry.put("packageName", app.packageName);
             entry.put("label", SettingsManager.getAppLabel(app));
             entry.put("type", type.name());
+            entry.put("group", group);
             result.add(entry);
         }
         result.sort((a, b) -> a.get("label").compareToIgnoreCase(b.get("label")));
         return newFixedLengthResponse(Response.Status.OK, "application/json", GSON.toJson(result));
     }
 
+    /** Returns all visible groups (excludes HIDDEN! and UNSUPPORTED!) with their app counts. */
+    private Response serveGroups() {
+        ConcurrentHashMap<String, Set<String>> gam = safeGetGroupAppsMap();
+        Set<String> hiddenPkgs = gam.getOrDefault(Settings.HIDDEN_GROUP, java.util.Collections.emptySet());
+        Set<String> unsupportedPkgs = gam.getOrDefault(Settings.UNSUPPORTED_GROUP, java.util.Collections.emptySet());
+
+        // Build a package→type map for fast lookup
+        Map<String, App.Type> typeByPkg = new HashMap<>();
+        for (ApplicationInfo app : PlatformExt.apps) {
+            typeByPkg.put(app.packageName, App.getType(app));
+        }
+
+        List<Map<String, Object>> groups = new ArrayList<>();
+        for (Map.Entry<String, Set<String>> entry : gam.entrySet()) {
+            String groupName = entry.getKey();
+            if (groupName.equals(Settings.HIDDEN_GROUP)) continue;
+            if (groupName.equals(Settings.UNSUPPORTED_GROUP)) continue;
+
+            Set<String> pkgs = entry.getValue();
+            // Count only visible, supported apps
+            long count = pkgs.stream()
+                    .filter(pkg -> !hiddenPkgs.contains(pkg) && !unsupportedPkgs.contains(pkg))
+                    .filter(pkg -> {
+                        App.Type t = typeByPkg.get(pkg);
+                        return t != null && t != App.Type.UNSUPPORTED && t != App.Type.UTILITY;
+                    })
+                    .count();
+
+            if (count == 0) continue;
+
+            Map<String, Object> g = new HashMap<>();
+            g.put("name", groupName);
+            g.put("count", count);
+            groups.add(g);
+        }
+        groups.sort((a, b) -> ((String) a.get("name")).compareToIgnoreCase((String) b.get("name")));
+        return newFixedLengthResponse(Response.Status.OK, "application/json", GSON.toJson(groups));
+    }
+
     private Response serveLaunch(IHTTPSession session) throws IOException, NanoHTTPD.ResponseException {
-        Map<String, String> body = new java.util.HashMap<>();
+        Map<String, String> body = new HashMap<>();
         session.parseBody(body);
         String json = body.get("postData");
         if (json == null || json.isEmpty()) {
@@ -132,14 +197,12 @@ public class LauncherHttpServer extends NanoHTTPD {
     private Response serveIcon(String packageName) {
         ApplicationInfo appInfo = findApp(packageName);
         if (appInfo != null) {
-            // Try the icon cache file first (fast path)
             File cacheFile = IconLoader.iconCacheFileForApp(appInfo);
             if (cacheFile.exists()) {
                 try {
                     return newChunkedResponse(Response.Status.OK, "image/webp", new FileInputStream(cacheFile));
                 } catch (IOException ignored) {}
             }
-            // Fallback: decode from PackageManager and return as PNG
             try {
                 PackageManager pm = Core.context().getPackageManager();
                 Drawable drawable = pm.getApplicationIcon(appInfo);
@@ -153,13 +216,25 @@ public class LauncherHttpServer extends NanoHTTPD {
                 Log.w(TAG, "Failed to load icon for " + packageName, e);
             }
         }
-        // Return a 1x1 transparent PNG if we can't find the icon
         byte[] empty = {(byte)0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A,0,0,0,13,73,72,68,82,
                 0,0,0,1,0,0,0,1,8,6,0,0,0,0x1F,0x15,(byte)0xC4,(byte)0x89,0,0,0,11,73,68,65,
                 84,8,(byte)0x99,99,96,96,(byte)0xF8,0x0F,0,0,2,1,0x01,(byte)0xE2,0x21,(byte)0xBC,
                 0x33,0,0,0,0,73,69,78,68,(byte)0xAE,0x42,0x60,(byte)0x82};
         return newFixedLengthResponse(Response.Status.OK, "image/png",
                 new ByteArrayInputStream(empty), empty.length);
+    }
+
+    /**
+     * Safe wrapper around getGroupAppsMap() that returns an empty map if SettingsManager
+     * has not yet been initialized (e.g. if a web request arrives before the launcher UI loads).
+     */
+    private static ConcurrentHashMap<String, Set<String>> safeGetGroupAppsMap() {
+        try {
+            return SettingsManager.getGroupAppsMap();
+        } catch (Exception e) {
+            Log.w(TAG, "SettingsManager not ready yet, returning empty group map", e);
+            return new ConcurrentHashMap<>();
+        }
     }
 
     private ApplicationInfo findApp(String packageName) {
