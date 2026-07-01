@@ -23,6 +23,11 @@ public class ScreenCastManager {
 
     private ScreenCastManager(MediaProjection projection) {
         this.projection = projection;
+        // Required on Android 14+: register callback before createVirtualDisplay
+        projection.registerCallback(new MediaProjection.Callback() {
+            @Override
+            public void onStop() { stop(); }
+        }, null);
         imageReader = ImageReader.newInstance(WIDTH, HEIGHT, PixelFormat.RGBA_8888, 2);
         virtualDisplay = projection.createVirtualDisplay(
                 "ScreenCast",
