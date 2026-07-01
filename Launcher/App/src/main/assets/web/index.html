@@ -33,6 +33,19 @@
   #empty { display: none; color: #555; text-align: center; padding: 60px 20px; font-size: 0.95rem; }
   #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1e1e3e; color: #a0c4ff; padding: 9px 20px; border-radius: 20px; border: 1px solid #3a3a5a; font-size: 0.9rem; pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 100; }
   #toast.show { opacity: 1; }
+
+  /* Screen cast */
+  #castBtn { background: #252535; border: 1px solid #444; border-radius: 8px; color: #a0c4ff; padding: 6px 12px; font-size: 0.85rem; cursor: pointer; white-space: nowrap; }
+  #castBtn:hover { background: #2a2a45; }
+  #castModal { display: none; position: fixed; inset: 0; background: #000a; z-index: 200; align-items: center; justify-content: center; }
+  #castModal.open { display: flex; }
+  #castBox { background: #111; border-radius: 12px; padding: 16px; max-width: 95vw; max-height: 95vh; display: flex; flex-direction: column; gap: 10px; }
+  #castHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  #castHeader h2 { color: #a0c4ff; font-size: 1rem; margin: 0; }
+  #castClose { background: #333; border: none; color: #ccc; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+  #castClose:hover { background: #444; }
+  #castStatus { color: #888; font-size: 0.9rem; text-align: center; padding: 20px 0; }
+  #castImg { display: none; max-width: 100%; max-height: 80vh; border-radius: 6px; object-fit: contain; }
 </style>
 </head>
 <body>
@@ -40,7 +53,19 @@
   <h1>⚡ Lightning Launcher</h1>
   <input id="search" type="text" placeholder="Search…" autocomplete="off" />
   <span id="count"></span>
+  <button id="castBtn" onclick="openCast()">📺 Screen</button>
 </header>
+
+<div id="castModal">
+  <div id="castBox">
+    <div id="castHeader">
+      <h2>📺 Screen Cast</h2>
+      <button id="castClose" onclick="closeCast()">✕ Close</button>
+    </div>
+    <p id="castStatus">Approve screen capture on the headset…</p>
+    <img id="castImg" alt="Screen cast" />
+  </div>
+</div>
 <div id="groups-bar"></div>
 <div id="grid"></div>
 <div id="empty">No apps found</div>
@@ -179,6 +204,31 @@ document.getElementById('search').addEventListener('input', function() {
 });
 
 init();
+
+function openCast() {
+  const modal = document.getElementById('castModal');
+  const img = document.getElementById('castImg');
+  const status = document.getElementById('castStatus');
+  modal.classList.add('open');
+  status.style.display = 'block';
+  status.textContent = 'Approve screen capture on the headset…';
+  img.style.display = 'none';
+  img.src = '/api/screencast';
+  img.onload = () => { status.style.display = 'none'; img.style.display = 'block'; };
+  img.onerror = () => { status.textContent = 'Permission denied or connection lost.'; img.style.display = 'none'; };
+}
+
+function closeCast() {
+  const img = document.getElementById('castImg');
+  img.src = '';
+  img.onload = null;
+  img.onerror = null;
+  document.getElementById('castModal').classList.remove('open');
+}
+
+document.getElementById('castModal').addEventListener('click', function(e) {
+  if (e.target === this) closeCast();
+});
 </script>
 </body>
 </html>

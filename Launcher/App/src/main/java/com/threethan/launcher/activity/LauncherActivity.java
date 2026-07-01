@@ -69,6 +69,8 @@ import com.threethan.launcher.helper.Compat;
 import com.threethan.launcher.helper.PlatformExt;
 import com.threethan.launcher.updater.LauncherUpdater;
 import com.threethan.launcher.updater.RemotePackageUpdater;
+import android.media.projection.MediaProjection;
+import android.media.projection.MediaProjectionManager;
 import com.threethan.launcher.web.WebServerService;
 import com.threethan.launchercore.Core;
 import com.threethan.launchercore.lib.ImageLib;
@@ -77,6 +79,7 @@ import com.threethan.launchercore.util.Launch;
 import com.threethan.launchercore.util.Platform;
 
 import java.io.File;
+import java.util.function.Consumer;
 import java.io.FileNotFoundException;
 import java.lang.ref.WeakReference;
 import java.lang.reflect.Method;
@@ -510,6 +513,33 @@ public class LauncherActivity extends Launch.LaunchingActivity {
                         if (o.getData() != null)
                             pickFile(o.getData().getData());
                     });
+
+    // Screen cast support
+    private static volatile Consumer<MediaProjection> pendingCaptureCallback;
+
+    private final ActivityResultLauncher<Intent> screenCaptureLauncher =
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                Consumer<MediaProjection> cb = pendingCaptureCallback;
+                pendingCaptureCallback = null;
+                if (cb == null) return;
+                if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                    MediaProjectionManager mpm =
+                            (MediaProjectionManager) getSystemService(MEDIA_PROJECTION_SERVICE);
+                    cb.accept(mpm.getMediaProjection(result.getResultCode(), result.getData()));
+                } else {
+                    cb.accept(null);
+                }
+            });
+
+    public static boolean requestScreenCapture(Consumer<MediaProjection> callback) {
+        LauncherActivity fg = getForegroundInstance();
+        if (fg == null) { callback.accept(null); return false; }
+        pendingCaptureCallback = callback;
+        MediaProjectionManager mpm =
+                (MediaProjectionManager) fg.getSystemService(MEDIA_PROJECTION_SERVICE);
+        fg.runOnUiThread(() -> fg.screenCaptureLauncher.launch(mpm.createScreenCaptureIntent()));
+        return true;
+    }
 
     private void pickFile(Uri uri) {
         if (filePickerTarget.equals(FilePickerTarget.APK)) {

@@ -19,6 +19,8 @@ import com.threethan.launchercore.metadata.IconLoader;
 import com.threethan.launchercore.util.App;
 import com.threethan.launchercore.util.Launch;
 
+import android.media.projection.MediaProjection;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -32,6 +34,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import fi.iki.elonen.NanoHTTPD;
 
@@ -63,6 +68,9 @@ public class LauncherHttpServer extends NanoHTTPD {
             if (uri.startsWith("/api/icon/") && method == Method.GET) {
                 String packageName = URLDecoder.decode(uri.substring("/api/icon/".length()), "UTF-8");
                 return serveIcon(packageName);
+            }
+            if (uri.equals("/api/screencast") && method == Method.GET) {
+                return serveScreencast();
             }
             return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found");
         } catch (Exception e) {
@@ -242,6 +250,82 @@ public class LauncherHttpServer extends NanoHTTPD {
             if (packageName.equals(app.packageName)) return app;
         }
         return null;
+    }
+
+    private Response serveScreencast() {
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicReference<MediaProjection> projRef = new AtomicReference<>();
+
+        boolean requested = com.threethan.launcher.activity.LauncherActivity.requestScreenCapture(proj -> {
+            projRef.set(proj);
+            latch.countDown();
+        });
+        if (!requested) return jsonError("Launcher not in foreground");
+
+        try {
+            if (!latch.await(30, TimeUnit.SECONDS) || projRef.get() == null) {
+                return jsonError("Screen capture permission denied or timed out");
+            }
+        } catch (InterruptedException e) {
+            return jsonError("Interrupted");
+        }
+
+        ScreenCastManager scm = ScreenCastManager.start(projRef.get());
+        return newChunkedResponse(Response.Status.OK,
+                "multipart/x-mixed-replace; boundary=frame",
+                new MjpegInputStream(scm));
+    }
+
+    private static class MjpegInputStream extends InputStream {
+        private final ScreenCastManager scm;
+        private byte[] buffer = new byte[0];
+        private int pos = 0;
+
+        MjpegInputStream(ScreenCastManager scm) { this.scm = scm; }
+
+        private boolean fillBuffer() {
+            while (scm.isActive()) {
+                byte[] frame = scm.captureFrame();
+                if (frame != null) {
+                    String header = "--frame\r\nContent-Type: image/jpeg\r\nContent-Length: "
+                            + frame.length + "\r\n\r\n";
+                    byte[] headerBytes = header.getBytes();
+                    buffer = new byte[headerBytes.length + frame.length + 2];
+                    System.arraycopy(headerBytes, 0, buffer, 0, headerBytes.length);
+                    System.arraycopy(frame, 0, buffer, headerBytes.length, frame.length);
+                    buffer[buffer.length - 2] = '\r';
+                    buffer[buffer.length - 1] = '\n';
+                    pos = 0;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        @Override
+        public int read() {
+            if (pos >= buffer.length) {
+                if (!fillBuffer()) return -1;
+            }
+            return buffer[pos++] & 0xFF;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) {
+            if (pos >= buffer.length) {
+                if (!fillBuffer()) return -1;
+            }
+            int available = buffer.length - pos;
+            int count = Math.min(len, available);
+            System.arraycopy(buffer, pos, b, off, count);
+            pos += count;
+            return count;
+        }
+
+        @Override
+        public void close() {
+            scm.stop();
+        }
     }
 
     private Response jsonError(String message) {
