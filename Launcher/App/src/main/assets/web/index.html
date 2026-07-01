@@ -213,9 +213,11 @@ function openCast() {
   status.style.display = 'block';
   status.textContent = 'Approve screen capture on the headset…';
   img.style.display = 'none';
-  img.src = '/api/screencast';
-  img.onload = () => { status.style.display = 'none'; img.style.display = 'block'; };
   img.onerror = () => { status.textContent = 'Permission denied or connection lost.'; img.style.display = 'none'; };
+  img.src = '/api/screencast';
+  // MJPEG never fires onload — show the img immediately and let the browser render frames
+  img.style.display = 'block';
+  status.style.display = 'none';
 }
 
 function closeCast() {
